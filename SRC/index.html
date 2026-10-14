@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Print Server Config</title>
+<link rel="icon" type="image/png" href="/favicon">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px;background:#494949}
+.container{background:#ddd;padding:20px;border-radius:8px}
+h2{color:#666;margin-top:20px}
+.form-group{margin-bottom:10px}
+label{display:block;margin-bottom:5px;font-weight:bold}
+input,textarea{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}
+.ip-group{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{background:#4CAF50;color:#fff;padding:10px 20px;border:none;border-radius:4px;margin-top:10px}
+.status{padding:10px;margin:10px 0;border-radius:4px;display:none}
+.success{background:#d4edda;color:#155724}
+.error{background:#f8d7da;color:#721c24}
+.station,.zpl-list{border:1px solid #ddd;padding:15px;margin:10px 0;border-radius:4px;background:#fafafa}
+textarea{font-family:monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Print Server Config</h1>
+<div id="status" class="status"></div>
+<form id="configForm">
+<h2>Server</h2>
+<div class="ip-group">
+<div class="form-group"><label>IP:</label><input type="text" name="server_ip" id="server_ip"></div>
+<div class="form-group"><label>Subnet:</label><input type="text" name="subnet" id="subnet"></div>
+<div class="form-group"><label>Gateway:</label><input type="text" name="gateway" id="gateway"></div>
+<div class="form-group"><label>DNS:</label><input type="text" name="dns" id="dns"></div>
+</div>
+<h2>Date/Time (RTC Reset Only)</h2>
+<div class="form-group">
+<label style="display:flex;align-items:center">
+<input type="checkbox" name="set_datetime" id="set_datetime" onchange="toggleDateTime()" style="width:auto;margin-right:8px">
+<span>Enable date/time override</span>
+</label>
+</div>
+<div id="datetime_fields" style="display:none">
+<div class="ip-group">
+<div class="form-group"><label>Year(20xx):</label><input type="number" name="dt_year" id="dt_year" min="2025" max="2099" value="2026"></div>
+<div class="form-group"><label>Month(1-12):</label><input type="number" name="dt_month" id="dt_month" min="1" max="12" value="1"></div>
+<div class="form-group"><label>Day(1-31):</label><input type="number" name="dt_day" id="dt_day" min="1" max="31" value="1"></div>
+<div class="form-group"><label>Weekday (0=Mon):</label><input type="number" name="dt_weekday" id="dt_weekday" min="0" max="6" value="0"></div>
+</div>
+<div class="ip-group">
+<div class="form-group"><label>Hour (24h):</label><input type="number" name="dt_hour" id="dt_hour" min="0" max="23" value="12"></div>
+<div class="form-group"><label>Minute:</label><input type="number" name="dt_minute" id="dt_minute" min="0" max="59" value="0"></div>
+<div class="form-group"><label>Second:</label><input type="number" name="dt_second" id="dt_second" min="0" max="59" value="0"></div>
+</div>
+</div>
+<h2>Stations</h2>
+<div id="stations"></div>
+<button type="button" onclick="addStation()">Add Station</button>
+<h2>ZPL Lists</h2>
+<div id="zpl_lists"></div>
+<button type="button" onclick="addZPLList()">Add List</button>
+<br><br>
+<button type="submit">Save</button>
+</form>
+</div>
+<script>
+let cfg={};
+let sc=0,zc=0,zlc={};
+function toggleDateTime(){
+const checked=document.getElementById('set_datetime').checked;
+document.getElementById('datetime_fields').style.display=checked?'block':'none';
+}
+fetch('/config').then(r=>r.json()).then(d=>{
+cfg=d;
+document.getElementById('server_ip').value=d.server_ip;
+document.getElementById('subnet').value=d.subnet;
+document.getElementById('gateway').value=d.gateway;
+document.getElementById('dns').value=d.dns;
+if(d.date_time){
+document.getElementById('set_datetime').checked=true;
+toggleDateTime();
+document.getElementById('dt_year').value=d.date_time[0];
+document.getElementById('dt_month').value=d.date_time[1];
+document.getElementById('dt_day').value=d.date_time[2];
+document.getElementById('dt_weekday').value=d.date_time[3];
+document.getElementById('dt_hour').value=d.date_time[4];
+document.getElementById('dt_minute').value=d.date_time[5];
+document.getElementById('dt_second').value=d.date_time[6];
+}
+d.sta.forEach((s,i)=>{
+addStation(s[0],s[1],s[2],s[3]);
+});
+d.zpl.forEach((z,i)=>{
+if(i>0){
+addZPLList(z);
+}
+});
+});
+function addStation(plc='192.168.1.10',prn='192.168.1.9',lst=1,tag='N7:0'){
+const d=document.createElement('div');
+d.className='station';
+d.innerHTML='<h3>Station '+(++sc)+'</h3><div class="ip-group"><div class="form-group"><label>PLC:</label><input name="sta_plc_'+sc+'" value="'+plc+'"></div><div class="form-group"><label>Printer:</label><input name="sta_printer_'+sc+'" value="'+prn+'"></div><div class="form-group"><label>List:</label><input type="number" name="sta_list_'+sc+'" value="'+lst+'"></div><div class="form-group"><label>Tag:</label><input name="sta_tag_'+sc+'" value="'+tag+'"></div></div><button type="button" style="margin-left:10px" onclick="this.parentElement.remove()">Remove</button>';
+document.getElementById('stations').appendChild(d);
+}
+function addZPLList(labels=null){
+const n=++zc;
+zlc[n]=0;
+const d=document.createElement('div');
+d.className='zpl-list';
+d.innerHTML='<h3>List '+n+'</h3><div id="zpl_'+n+'_labels"></div><button type="button" onclick="addZPLLabel('+n+')">Add Label</button><button type="button" style="margin-left:10px" onclick="this.parentElement.remove()">Remove</button>';
+document.getElementById('zpl_lists').appendChild(d);
+if(labels){
+labels.forEach((lbl,i)=>{
+if(i>0)addZPLLabel(n,lbl);
+});
+}else{
+addZPLLabel(n);
+}
+}
+function addZPLLabel(n,txt='^XA^FO50,50^ADN,36,20^FDLabel^FS^XZ'){
+const l=++zlc[n];
+const d=document.createElement('div');
+d.className='form-group';
+d.innerHTML='<label>Label '+l+':</label><textarea name="zpl_'+n+'_'+l+'" rows="2">'+txt+'</textarea>';
+document.getElementById('zpl_'+n+'_labels').appendChild(d);
+}
+document.getElementById('configForm').addEventListener('submit',async(e)=>{
+e.preventDefault();
+if(!confirm('Save configuration changes?'))return;
+const fd=new FormData(e.target);
+const data={};
+for(let[k,v]of fd.entries())data[k]=v;
+try{
+const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+const res=await r.json();
+const s=document.getElementById('status');
+s.style.display='block';
+if(res.success){
+s.className='status success';
+s.textContent=res.ip_changed?'Configuration updated! IP changed to '+res.new_ip+'. Restart ESP32.':'Configuration updated successfully!';
+if(!res.ip_changed)setTimeout(()=>location.reload(),2000);
+}else{
+s.className='status error';
+s.textContent='Error: '+(res.error||'Unknown');
+}
+}catch(err){
+const s=document.getElementById('status');
+s.style.display='block';
+s.className='status error';
+s.textContent='Error: '+err.message;
+}
+});
+</script>
+</body>
+</html>
